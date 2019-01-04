@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<style>
+
+.counties :hover {
+  fill: darkred !important;
+}
+
+.county-borders {
+  fill: none;
+  stroke:black;
+  stroke-width: 0.5px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+body{
+    background: #79b3ce;
+}
+
+</style>
+<svg width="1000" height="600"></svg>
+<script src="https://d3js.org/d3.v4.min.js"></script>
+<script src="https://d3js.org/topojson.v2.min.js"></script>
+<script>
+
+//var crime = {victimID: "", date: "", name: "", gender: "", age: "", city: ""};
+
+/* Map Functions */
+function drawMap()
+{
+    var svg = d3.select("svg");
+
+    var path = d3.geoPath();
+
+    d3.json("https://d3js.org/us-10m.v1.json", function(error, us) {
+    if (error) throw error;
+
+    svg.append("g")
+        .attr("class", "counties")
+        .selectAll("path")
+        .data(topojson.feature(us, us.objects.counties).features)
+        .enter().append("path")
+        .attr("d", path)
+        .style("fill", function(d)
+        {
+            for (var i = 0; i < countiesInfo.length; i++)
+            {
+                if (parseInt(d.id) == countiesInfo[i].id)
+                {
+                    //console.log(countyData[i].deathCount);
+                    if (countiesInfo[i].deathCount > 250)
+                        return "081d58";
+                    else if (countiesInfo[i].deathCount >= 200)
+                        return "253494";
+                    else if (countiesInfo[i].deathCount >= 150)
+                        return "225ea8";
+                    else if (countiesInfo[i].deathCount >= 100)
+                        return "1d91c0";
+                    else if (countiesInfo[i].deathCount >= 50)
+                        return "41b6c4";
+                    else if (countiesInfo[i].deathCount >= 25)
+                        return "7fcdbb";
+                    else if (countiesInfo[i].deathCount >= 5)
+                        return "c7e9b4";
+                    else if (countiesInfo[i].deathCount > 0)
+                        return "edf8b1";
+                    else
+                        return "ffffd9";
+                }
+            }
+        })
+        .append("title")
+        .text(function(d) {
+            for (var i = 0; i < countiesInfo.length; i++)
+            {
+                if (parseInt(d.id) == countiesInfo[i].id)
+                {
+                    return (countiesInfo[i].name + ": " + countiesInfo[i].deathCount);
+                }
+            }
+        });
+
+    svg.append("path")
+        .attr("class", "county-borders")
+        .attr("d", path(topojson.mesh(us, us.objects.counties, function(a, b) { return a !== b; })));
+    });
+}
+
+/* Legend Functions */
+function drawLegend()
+{
+    var paddingDistance = 2;
+    var svg = d3.select("svg");
+
+    var colorSet = ["#081d58", "#253494", "#225ea8", "#1d91c0", "#41b6c4", "#7fcdbb", "#c7e9b4", "#edf8b1", "#ffffd9"]
+    var valuesSet = ["" ,"> 250", "200 - 250", "150 - 200", "100 - 150", "50 - 100", "25 - 50", "5 - 25", "1 - 5", "0"]
+
+    var legendBoxes = svg.selectAll("rect")
+                         .data(colorSet)
+                         .enter()
+                         .append("rect")
+                         .attr("x", 900)
+                         .attr("y", function(d, i) { return 340 + i * (25 + paddingDistance)})
+                         .attr("width", 40)
+                         .attr("height", 25)
+                         .attr("fill", function(d, i) { return colorSet[i]});
+
+    var legendTitle = svg.append("text")
+                         .text("Gun Deaths")
+                         .attr("x", 885)
+                         .attr("y", 330)
+                         .attr("font-family", "sans-serif")
+                         .attr("font-size", "16px")
+                         .attr("fill", "black");
+                         
+
+    var textForBoxes = svg.selectAll("text")
+                          .data(valuesSet)
+                          .enter()
+                          .append("text")
+                          .text(function(d, i) {return valuesSet[i]})
+                          .attr("x", 942)
+                          .attr("y", function(d, i) { return 330 + i*(25 + paddingDistance) })
+                          .attr("font-family", "sans-serif")
+                          .attr("font-size", "11px")
+                          .attr("fill", "black");
+
+    var titleText = svg.append("text")
+                       .text("Slate Gun Deaths")
+                       .attr("x", 530)
+                       .attr("y", 50)
+                       .attr("font-family", "sans-serif")
+                       .attr("font-size", "40px")
+                       .attr("fill", "black")
+                       .style("font-weight", "bold");
+
+
+
+    console.log("Legend Loaded");
+}
+
+/* CORS Request Functions */
+function createCORSRequest(method, url) 
+{
+  var xhr = new XMLHttpRequest();
+  if ("withCredentials" in xhr) {
+    xhr.open(method, url, true);
+  } else if (typeof XDomainRequest != "undefined") {
+    xhr = new XDomainRequest();
+    xhr.open(method, url);
+  } else {
+    xhr = null;
+  }
+  return xhr;
+}
+
+function makeCorsRequest(c) 
+{
+    //12069 Total Crimes
+    if (c > 12069) {
+        //console.log(JSON.stringify(countiesInfo));
+        d3.selectAll('*').append('p').html(JSON.stringify(countiesInfo));
+        return;
+    }
+
+    var lat = gunDeathsInfo[c]["lat"];
+    var lng = gunDeathsInfo[c]["lng"];
+    var crime = {victimid: gunDeathsInfo[c]["victimID"], date: gunDeathsInfo[c]["date"], name: gunDeathsInfo[c]["name"], gender: gunDeathsInfo[c]["gender"], age: gunDeathsInfo[c]["age"], city: gunDeathsInfo[c]["city"]}
+
+    if (lat == 'null' || lng == 'null') {
+        makeCorsRequest(c + 1);
+        return;
+    }
+
+    var url = "http://data.fcc.gov/api/block/find?format=json&latitude=" + lat + "&longitude=" + lng;
+
+    var xhr = createCORSRequest('GET', url);
+    if (!xhr) {
+        alert('CORS not supported');
+        return;
+    }
+
+    // Response handlers.
+    xhr.onload = function() 
+    {
+        var responseObject = JSON.parse(xhr.responseText);
+
+        var countyID = responseObject.County.FIPS;
+
+        for (var i = 0; i < countiesInfo.length; i++)
+        {
+            if (parseInt(countyID) == parseInt(countiesInfo[i].id)) {
+                countiesInfo[i].deathCount++;
+                countiesInfo[i].crimes.push(crime);
+            }
+        }
+
+        if (c % 100 == 0)
+            console.log(c);
+
+        makeCorsRequest(c + 1);
+    };
+
+    xhr.onerror = function() 
+    {
+        console.log('Woops, there was an error making the request.');
+    };
+    
+    xhr.send();
+}
+
+/* File Reading Functions */
+function loadCountyNamesTSV()
+{
+    d3.tsv("us-county-names.tsv", function(data)
+    {
+        for (var i = 0; i < data.length; i++)
+        {
+            var countyID    = data[i].id;
+            var countyName  = data[i].name;
+
+            var newCounty = {id: countyID, name: countyName, deathCount: 0, crimes:[]};
+            countiesInfo.push(newCounty);
+        }
+        console.log("loaded us-county-names.tsv");
+        loadPreprocessedCrimeCounts();
+        //loadSlateGunDeathsCSV();
+    });
+}
+
+function loadSlateGunDeathsCSV()
+{
+    d3.csv("SlateGunDeaths.csv", function(data)
+    {
+        gunDeathsInfo = data;
+
+        var c = 0;
+        makeCorsRequest(c);
+        console.log("loaded SlateGunDeaths.csv");
+    });
+
+}
+
+function loadPreprocessedCrimeCounts()
+{
+    d3.json("deathcountdata.json", function(data)
+    {
+        countiesInfo = data;
+        console.log("deathcountdata.json loaded");
+        drawMap();
+        drawLegend();
+    });
+}
+
+//
+/* "Main" */
+//
+var countiesInfo  = []; // {id: "countyID", name: "countyName", deathCount: #}
+var gunDeathsInfo = [];
+
+loadCountyNamesTSV();
+//drawMap();
+
+</script>
